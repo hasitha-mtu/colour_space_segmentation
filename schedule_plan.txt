@@ -83,43 +83,19 @@ This is your **core contribution**. You need results before analyzing them.
 **Morning** - UNet baseline:
 ```bash
 # RGB baseline (2-3 hours)
-python -m src.experiments.train_baseline \
-    --data_dir data/crookstown \
-    --model_type unet \
-    --feature_config rgb \
-    --batch_size 4 \
-    --epochs 100 \
-    --use_wandb
+python -m src.experiments.train_baseline --data_dir data/crookstown --model_type unet --feature_config rgb --batch_size 4 --epochs 100 --use_wandb
 
 # All features (2-3 hours)
-python -m src.experiments.train_baseline \
-    --data_dir data/crookstown \
-    --model_type unet \
-    --feature_config all \
-    --batch_size 4 \
-    --epochs 100 \
-    --use_wandb
+python -m src.experiments.train_baseline --data_dir data/crookstown --model_type unet --feature_config all --batch_size 4 --epochs 100 --use_wandb
 ```
 
 **Afternoon** - DeepLabv3+ baseline:
 ```bash
 # RGB (3-4 hours)
-python -m src.experiments.train_baseline \
-    --data_dir data/crookstown \
-    --model_type deeplabv3plus \
-    --feature_config rgb \
-    --batch_size 4 \
-    --epochs 100 \
-    --use_wandb
+python -m src.experiments.train_baseline --data_dir data/crookstown --model_type deeplabv3plus --feature_config rgb --batch_size 4 --epochs 100 --use_wandb
 
 # All features (3-4 hours)
-python -m src.experiments.train_baseline \
-    --data_dir data/crookstown \
-    --model_type deeplabv3plus \
-    --feature_config all \
-    --batch_size 4 \
-    --epochs 100 \
-    --use_wandb
+python -m src.experiments.train_baseline --data_dir data/crookstown --model_type deeplabv3plus --feature_config all --batch_size 4 --epochs 100 --use_wandb
 ```
 
 **End of Day 1**: Check W&B dashboard, verify IoU scores are reasonable (>0.70)
@@ -131,26 +107,10 @@ python -m src.experiments.train_baseline \
 **Morning** - DINOv2:
 ```bash
 # RGB + DINOv2 (4-5 hours)
-python -m src.experiments.train_dinov2 \
-    --data_dir data/crookstown \
-    --feature_config rgb \
-    --dino_model dinov2_vitb14 \
-    --freeze_dino \
-    --batch_size 4 \
-    --epochs 100 \
-    --image_size 448 \
-    --use_wandb
+python -m src.experiments.train_dinov2 --data_dir data/crookstown --feature_config rgb --dino_model dinov2_vitb14 --freeze_dino --batch_size 4 --epochs 100 --image_size 448 --use_wandb
 
 # All features + DINOv2 (4-5 hours) - Run overnight
-python -m src.experiments.train_dinov2 \
-    --data_dir data/crookstown \
-    --feature_config all \
-    --dino_model dinov2_vitb14 \
-    --freeze_dino \
-    --batch_size 4 \
-    --epochs 100 \
-    --image_size 448 \
-    --use_wandb
+python -m src.experiments.train_dinov2 --data_dir data/crookstown --feature_config all --dino_model dinov2_vitb14 --freeze_dino --batch_size 4 --epochs 100 --image_size 448 --use_wandb
 ```
 
 ---
@@ -166,20 +126,10 @@ wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth -P che
 **Training**:
 ```bash
 # SAM Encoder + Decoder (5-6 hours)
-python -m src.experiments.train_sam \
-    --data_dir data/crookstown \
-    --sam_type encoder \
-    --batch_size 4 \
-    --epochs 100 \
-    --use_wandb
+python -m src.experiments.train_sam --data_dir data/crookstown --sam_type encoder --batch_size 4 --epochs 100 --use_wandb
 
 # SAM Fine-tuned (6-7 hours) - Run overnight
-python -m src.experiments.train_sam \
-    --data_dir data/crookstown \
-    --sam_type finetuned \
-    --batch_size 4 \
-    --epochs 100 \
-    --use_wandb
+python -m src.experiments.train_sam --data_dir data/crookstown --sam_type finetuned --batch_size 4 --epochs 100 --use_wandb
 ```
 
 ---
@@ -190,32 +140,16 @@ python -m src.experiments.train_sam \
 
 ```bash
 # UNet + Luminance only
-python -m src.experiments.train_baseline \
-    --model_type unet \
-    --feature_config luminance \
-    --batch_size 4 \
-    --epochs 100
+python -m src.experiments.train_baseline --model_type unet --feature_config luminance --batch_size 4 --epochs 100
 
 # UNet + Chrominance only
-python -m src.experiments.train_baseline \
-    --model_type unet \
-    --feature_config chrominance \
-    --batch_size 4 \
-    --epochs 100
+python -m src.experiments.train_baseline --model_type unet --feature_config chrominance --batch_size 4 --epochs 100
 
 # DeepLabv3+ + Luminance
-python -m src.experiments.train_baseline \
-    --model_type deeplabv3plus \
-    --feature_config luminance \
-    --batch_size 4 \
-    --epochs 100
+python -m src.experiments.train_baseline --model_type deeplabv3plus --feature_config luminance --batch_size 4 --epochs 100
 
 # DeepLabv3+ + Chrominance
-python -m src.experiments.train_baseline \
-    --model_type deeplabv3plus \
-    --feature_config chrominance \
-    --batch_size 4 \
-    --epochs 100
+python -m src.experiments.train_baseline --model_type deeplabv3plus --feature_config chrominance --batch_size 4 --epochs 100
 ```
 
 ---
@@ -226,18 +160,10 @@ Only if time permits and results look interesting:
 
 ```bash
 # DINOv2 + Luminance
-python -m src.experiments.train_dinov2 \
-    --feature_config luminance \
-    --freeze_dino \
-    --batch_size 4 \
-    --epochs 100
+python -m src.experiments.train_dinov2 --feature_config luminance --freeze_dino --batch_size 4 --epochs 100
 
 # DINOv2 + Chrominance
-python -m src.experiments.train_dinov2 \
-    --feature_config chrominance \
-    --freeze_dino \
-    --batch_size 4 \
-    --epochs 100
+python -m src.experiments.train_dinov2 --feature_config chrominance --freeze_dino --batch_size 4 --epochs 100
 ```
 
 ---
@@ -248,12 +174,7 @@ python -m src.experiments.train_dinov2 \
 
 ```bash
 # Full analysis on all 415 images
-python -m src.analysis.feature_importance \
-    --data_dir data/crookstown \
-    --samples_per_image 5000 \
-    --n_estimators 100 \
-    --shap_samples 1000 \
-    --output_dir experiments/feature_importance
+python -m src.analysis.feature_importance --data_dir data/crookstown --samples_per_image 5000 --n_estimators 100 --shap_samples 1000 --output_dir experiments/feature_importance
 ```
 
 **This tells you**:
@@ -273,13 +194,10 @@ python -m src.analysis.feature_importance \
 
 ```bash
 # Collect all results and generate comparison
-python -m src.analysis.compare_models \
-    --results_dir experiments/results \
-    --use_wandb
+python -m src.analysis.compare_models --results_dir experiments/results --use_wandb
 
 # Or from saved files if no W&B
-python -m src.analysis.compare_models \
-    --results_dir experiments/results
+python -m src.analysis.compare_models --results_dir experiments/results
 ```
 
 **Outputs**:
