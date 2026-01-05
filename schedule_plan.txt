@@ -1,0 +1,391 @@
+Excellent question! Let me give you the **optimal workflow** with clear priorities:
+
+---
+
+## 🎯 Recommended Order
+
+### **Phase 1: Quick Validation (1-2 hours)**
+Test that everything works before committing to long training runs.
+
+### **Phase 2: Systematic Model Training (2-5 days)**
+Your main experimental work - the ablation study.
+
+### **Phase 3: Feature Importance Analysis (2-4 hours)**
+Explains WHY the results came out the way they did.
+
+### **Phase 4: Results Compilation (2-3 hours)**
+Create comparison tables, plots, and paper-ready outputs.
+
+---
+
+## 📋 Detailed Step-by-Step Workflow
+
+### **PHASE 1: Quick Validation (Day 0) - 1-2 hours**
+
+**Goal**: Verify everything works before long training runs.
+
+```bash
+# Step 1: Test the pipeline
+python test_pipeline.py
+# Expected: ✅ ALL TESTS PASSED!
+
+# Step 2: Quick training test (2 epochs, small model)
+python -m src.experiments.train_baseline \
+    --data_dir data/crookstown \
+    --model_type unet \
+    --feature_config rgb \
+    --batch_size 4 \
+    --epochs 2 \
+    --base_channels 32  # Smaller for speed
+
+# Step 3: Verify outputs
+ls experiments/results/baseline/unet/rgb/checkpoints/
+# Should see: best_model.pth, training_history.json
+
+# Step 4: Check one DINOv2 forward pass works
+python -c "
+from src.models.hybrid_dinov2 import HybridDINOv2
+import torch
+model = HybridDINOv2(in_channels=10)
+x = torch.rand(1, 10, 448, 448)
+out = model(x)
+print(f'✓ DINOv2 works! Output: {out.shape}')
+"
+```
+
+**If everything passes** → Proceed to Phase 2  
+**If errors occur** → Fix issues (refer to TROUBLESHOOTING.md)
+
+---
+
+### **PHASE 2: Systematic Ablation Study (Days 1-5) - Main Experimental Work**
+
+This is your **core contribution**. You need results before analyzing them.
+
+#### **Strategy**: Train models in priority order based on paper importance.
+
+**Total Runs Needed**: 12-16 model×feature combinations
+
+| Priority | Model | Feature Configs | Why This Order |
+|----------|-------|----------------|----------------|
+| **P1** | UNet (baseline) | RGB, All | Fast, establishes baseline |
+| **P2** | DeepLabv3+ | RGB, All | Strong CNN baseline |
+| **P3** | DINOv2 Hybrid | RGB, All | Main contribution #1 |
+| **P4** | SAM Encoder | RGB only | Main contribution #2 |
+| **P5** | UNet | Luminance, Chrominance | Complete ablation |
+| **P6** | DeepLabv3+ | Luminance, Chrominance | Complete ablation |
+| **P7** | DINOv2 | Luminance, Chrominance | Optional (if time) |
+
+---
+
+#### **Day 1: CNN Baselines (Priority 1-2)**
+
+**Morning** - UNet baseline:
+```bash
+# RGB baseline (2-3 hours)
+python -m src.experiments.train_baseline \
+    --data_dir data/crookstown \
+    --model_type unet \
+    --feature_config rgb \
+    --batch_size 4 \
+    --epochs 100 \
+    --use_wandb
+
+# All features (2-3 hours)
+python -m src.experiments.train_baseline \
+    --data_dir data/crookstown \
+    --model_type unet \
+    --feature_config all \
+    --batch_size 4 \
+    --epochs 100 \
+    --use_wandb
+```
+
+**Afternoon** - DeepLabv3+ baseline:
+```bash
+# RGB (3-4 hours)
+python -m src.experiments.train_baseline \
+    --data_dir data/crookstown \
+    --model_type deeplabv3plus \
+    --feature_config rgb \
+    --batch_size 4 \
+    --epochs 100 \
+    --use_wandb
+
+# All features (3-4 hours)
+python -m src.experiments.train_baseline \
+    --data_dir data/crookstown \
+    --model_type deeplabv3plus \
+    --feature_config all \
+    --batch_size 4 \
+    --epochs 100 \
+    --use_wandb
+```
+
+**End of Day 1**: Check W&B dashboard, verify IoU scores are reasonable (>0.70)
+
+---
+
+#### **Day 2: Foundation Models (Priority 3-4)**
+
+**Morning** - DINOv2:
+```bash
+# RGB + DINOv2 (4-5 hours)
+python -m src.experiments.train_dinov2 \
+    --data_dir data/crookstown \
+    --feature_config rgb \
+    --dino_model dinov2_vitb14 \
+    --freeze_dino \
+    --batch_size 4 \
+    --epochs 100 \
+    --image_size 448 \
+    --use_wandb
+
+# All features + DINOv2 (4-5 hours) - Run overnight
+python -m src.experiments.train_dinov2 \
+    --data_dir data/crookstown \
+    --feature_config all \
+    --dino_model dinov2_vitb14 \
+    --freeze_dino \
+    --batch_size 4 \
+    --epochs 100 \
+    --image_size 448 \
+    --use_wandb
+```
+
+---
+
+#### **Day 3: SAM Models (Priority 4)**
+
+**Setup** - Download SAM checkpoint:
+```bash
+mkdir -p checkpoints
+wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth -P checkpoints/
+```
+
+**Training**:
+```bash
+# SAM Encoder + Decoder (5-6 hours)
+python -m src.experiments.train_sam \
+    --data_dir data/crookstown \
+    --sam_type encoder \
+    --batch_size 4 \
+    --epochs 100 \
+    --use_wandb
+
+# SAM Fine-tuned (6-7 hours) - Run overnight
+python -m src.experiments.train_sam \
+    --data_dir data/crookstown \
+    --sam_type finetuned \
+    --batch_size 4 \
+    --epochs 100 \
+    --use_wandb
+```
+
+---
+
+#### **Day 4: Complete Ablation (Priority 5-6)**
+
+**Individual feature groups** - to answer "which features matter?":
+
+```bash
+# UNet + Luminance only
+python -m src.experiments.train_baseline \
+    --model_type unet \
+    --feature_config luminance \
+    --batch_size 4 \
+    --epochs 100
+
+# UNet + Chrominance only
+python -m src.experiments.train_baseline \
+    --model_type unet \
+    --feature_config chrominance \
+    --batch_size 4 \
+    --epochs 100
+
+# DeepLabv3+ + Luminance
+python -m src.experiments.train_baseline \
+    --model_type deeplabv3plus \
+    --feature_config luminance \
+    --batch_size 4 \
+    --epochs 100
+
+# DeepLabv3+ + Chrominance
+python -m src.experiments.train_baseline \
+    --model_type deeplabv3plus \
+    --feature_config chrominance \
+    --batch_size 4 \
+    --epochs 100
+```
+
+---
+
+#### **Day 5: Optional Extended Ablation (Priority 7)**
+
+Only if time permits and results look interesting:
+
+```bash
+# DINOv2 + Luminance
+python -m src.experiments.train_dinov2 \
+    --feature_config luminance \
+    --freeze_dino \
+    --batch_size 4 \
+    --epochs 100
+
+# DINOv2 + Chrominance
+python -m src.experiments.train_dinov2 \
+    --feature_config chrominance \
+    --freeze_dino \
+    --batch_size 4 \
+    --epochs 100
+```
+
+---
+
+### **PHASE 3: Feature Importance Analysis (After Phase 2) - 2-4 hours**
+
+**Why After Phase 2**: This analysis **explains** your model results, so run it once you have trained models.
+
+```bash
+# Full analysis on all 415 images
+python -m src.analysis.feature_importance \
+    --data_dir data/crookstown \
+    --samples_per_image 5000 \
+    --n_estimators 100 \
+    --shap_samples 1000 \
+    --output_dir experiments/feature_importance
+```
+
+**This tells you**:
+- Which features Random Forest thinks are most important
+- Luminance vs Chrominance contribution ratio
+- Validates (or contradicts) your model training results
+
+**Example insight**:
+- If UNet+All barely beats UNet+RGB → Feature importance shows why (luminance/chrominance ratio)
+- If DINOv2+RGB wins → Feature importance confirms RGB captures the key signals
+
+---
+
+### **PHASE 4: Results Compilation (After Phase 3) - 2-3 hours**
+
+**Create comparison tables and plots**:
+
+```bash
+# Collect all results and generate comparison
+python -m src.analysis.compare_models \
+    --results_dir experiments/results \
+    --use_wandb
+
+# Or from saved files if no W&B
+python -m src.analysis.compare_models \
+    --results_dir experiments/results
+```
+
+**Outputs**:
+- `experiments/comparison/val_iou_table.csv` - For your paper
+- `experiments/comparison/val_iou_comparison.png` - Bar chart
+- `experiments/comparison/params_vs_performance.png` - Efficiency plot
+- `experiments/comparison/summary_report.txt` - Text summary
+
+---
+
+## 📊 Complete Timeline Summary
+
+| Phase | Duration | When | Output |
+|-------|----------|------|--------|
+| **Phase 1: Validation** | 1-2 hours | Day 0 | Confidence everything works |
+| **Phase 2: Model Training** | 2-5 days | Days 1-5 | All trained models + metrics |
+| **Phase 3: Feature Analysis** | 2-4 hours | After Phase 2 | Luminance/Chrominance insights |
+| **Phase 4: Compilation** | 2-3 hours | After Phase 3 | Paper-ready tables/plots |
+| **Total** | **3-6 days** | | Complete results for paper |
+
+---
+
+## 💡 Parallel Processing Strategy
+
+**If you have access to multiple GPUs or can run overnight**:
+
+```bash
+# Terminal 1 (GPU 0)
+CUDA_VISIBLE_DEVICES=0 python -m src.experiments.train_baseline --model_type unet --feature_config rgb
+
+# Terminal 2 (GPU 1)
+CUDA_VISIBLE_DEVICES=1 python -m src.experiments.train_baseline --model_type unet --feature_config all
+
+# Terminal 3 (CPU - feature importance in parallel)
+python -m src.analysis.feature_importance --data_dir data/crookstown &
+```
+
+**This can reduce total time from 5 days to 2-3 days**.
+
+---
+
+## 🎯 Minimum Viable Paper
+
+If you're **time-constrained**, this is the **minimum** for a solid paper:
+
+### **Essential Runs (12-24 hours total)**:
+1. ✅ UNet + RGB
+2. ✅ UNet + All  
+3. ✅ DeepLabv3+ + RGB
+4. ✅ DeepLabv3+ + All
+5. ✅ DINOv2 + RGB
+6. ✅ SAM Encoder + RGB
+7. ✅ Feature Importance Analysis
+
+**This gives you**:
+- CNN baselines (UNet, DeepLabv3+)
+- Foundation model comparison (DINOv2 vs SAM)
+- Feature ablation (RGB vs All)
+- Quantitative feature analysis
+
+---
+
+## 🚀 What To Do RIGHT NOW
+
+**Step 1** (5 minutes):
+```bash
+cd pytorch_river_seg
+python test_pipeline.py
+```
+
+**Step 2** (10 minutes):
+```bash
+# Organize your 415 images
+ls data/crookstown/images/ | wc -l  # Should show 415
+ls data/crookstown/masks/ | wc -l   # Should show 415
+```
+
+**Step 3** (2 hours):
+```bash
+# Start first training run
+python -m src.experiments.train_baseline \
+    --data_dir data/crookstown \
+    --model_type unet \
+    --feature_config rgb \
+    --batch_size 4 \
+    --epochs 100 \
+    --use_wandb
+```
+
+**Step 4** - While training:
+- Monitor W&B dashboard
+- Check GPU usage: `nvidia-smi`
+- Verify checkpoint saving every epoch
+
+**Then**: Follow the Day 1-5 schedule above!
+
+---
+
+## ✅ My Recommendation
+
+**START TODAY**:
+1. ✅ Verify everything works (Phase 1)
+2. ✅ Begin Phase 2 training runs (follow priority order)
+3. ⏳ Run Phase 3 feature analysis once you have some model results
+4. ⏳ Run Phase 4 compilation at the end
+
+**Phase 2 is your bottleneck** - it takes the longest. The sooner you start training, the sooner you'll have results!
+
+Ready to start? Let's begin with Phase 1 validation! 🚀
