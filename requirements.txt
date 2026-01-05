@@ -1,7 +1,9 @@
 # Core deep learning
 # Note: PyTorch 2.6+ changed torch.load defaults - code is compatible
-torch>=2.0.0
-torchvision>=0.15.0
+# conda create -n "colour_spaces_venv" python=3.12 ipython
+# conda activate colour_spaces_venv 
+# pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# pip install -r requirements.txt 
 
 # Computer vision and augmentation
 opencv-python>=4.8.0
