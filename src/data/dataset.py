@@ -401,12 +401,18 @@ def get_dataloaders(
 
 
 if __name__ == "__main__":
+
+    train_loader, val_loader = get_dataloaders(
+          data_root='dataset/data_sliced/train',
+          feature_config='all',
+          batch_size=4)
+
     print("Multi-Channel Dataset with Automatic Splitting")
     print("\nRecommended Usage (Automatic splitting):")
     print("  from src.data.dataset import get_dataloaders")
     print("  ")
     print("  train_loader, val_loader = get_dataloaders(")
-    print("      data_root='data/my_dataset',")
+    print("      data_root='dataset/data_sliced/train',")
     print("      feature_config='all',")
     print("      batch_size=4")
     print("  )")
