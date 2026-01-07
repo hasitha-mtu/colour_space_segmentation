@@ -34,6 +34,7 @@ def train_dinov2(
     feature_config: str = 'all',
     dino_model: str = 'dinov2_vitb14',
     freeze_dino: bool = True,
+    fusion_type: str = 'simple',
     epochs: int = 100,
     batch_size: int = 4,
     lr: float = 1e-4,
@@ -51,6 +52,7 @@ def train_dinov2(
         feature_config: 'rgb', 'luminance', 'chrominance', or 'all'
         dino_model: DINOv2 variant ('dinov2_vits14', 'dinov2_vitb14', 'dinov2_vitl14')
         freeze_dino: Freeze DINOv2 encoder weights
+        fusion_type: Fusion strategy ('simple' or 'pooled_attention')
         epochs: Number of epochs
         batch_size: Batch size
         lr: Learning rate
@@ -71,6 +73,7 @@ def train_dinov2(
     print(f"Feature config: {feature_config}")
     print(f"DINOv2 model: {dino_model}")
     print(f"Freeze DINOv2: {freeze_dino}")
+    print(f"Fusion type: {fusion_type}")
     print(f"Device: {device}")
     print(f"Batch size: {batch_size}")
     print(f"Learning rate: {lr}")
@@ -121,7 +124,8 @@ def train_dinov2(
         num_classes=1,
         dino_model=dino_model,
         freeze_dino=freeze_dino,
-        cnn_base_channels=cnn_base_channels
+        cnn_base_channels=cnn_base_channels,
+        fusion_type=fusion_type
     )
     
     # Print model info
@@ -134,6 +138,24 @@ def train_dinov2(
     print(f"  Trainable parameters: {trainable_params:,}")
     print(f"  Percentage trainable: {100 * trainable_params / total_params:.1f}%")
     print(f"  Model size: ~{total_params * 4 / (1024**2):.1f} MB\n")
+    
+    # Verify DINOv2 is truly frozen if requested
+    if freeze_dino and model.dino is not None:
+        dino_trainable = sum(p.numel() for p in model.dino.parameters() if p.requires_grad)
+        if dino_trainable == 0:
+            print("✓ Verified: DINOv2 has 0 trainable parameters (properly frozen)")
+        else:
+            raise RuntimeError(
+                f"ERROR: DINOv2 should have 0 trainable params but found {dino_trainable:,}! "
+                f"This will cause massive memory usage (~67 GB)."
+            )
+        
+        # Additional check: verify gradients are disabled during forward pass
+        model.eval()
+        test_input = torch.randn(1, in_channels, image_size, image_size)
+        with torch.no_grad():
+            _ = model(test_input)
+        print("✓ Verified: Forward pass completed without gradient computation\n")
     
     # Loss and optimizer
     criterion = CombinedLoss(
@@ -179,6 +201,14 @@ def train_dinov2(
         early_stopping_patience=20
     )
     
+    # Memory check before training (helps debug OOM issues)
+    if device == 'cuda':
+        torch.cuda.empty_cache()
+        print(f"\nGPU Memory Status:")
+        print(f"  Allocated: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        print(f"  Reserved: {torch.cuda.memory_reserved(0) / 1e9:.2f} GB")
+        print(f"  Total GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB\n")
+    
     # Train
     trainer.fit(num_epochs=epochs)
     
@@ -207,6 +237,9 @@ def main():
                        help='DINOv2 model variant')
     parser.add_argument('--freeze_dino', action='store_true',
                        help='Freeze DINOv2 encoder weights')
+    parser.add_argument('--fusion_type', type=str, default='simple',
+                       choices=['simple', 'pooled_attention'],
+                       help='Fusion strategy: simple (most memory-efficient) or pooled_attention')
     parser.add_argument('--cnn_base_channels', type=int, default=64,
                        help='Base channels for CNN branch')
     

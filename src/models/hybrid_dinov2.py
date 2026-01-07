@@ -36,13 +36,14 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 
 
-class CrossAttentionFusion(nn.Module):
+class PooledAttentionFusion(nn.Module):
     """
-    Cross-attention fusion between CNN and DINOv2 features
+    Memory-efficient cross-attention fusion using adaptive pooling
     
-    Allows CNN features to attend to DINOv2 semantic features,
-    enriching the multi-channel CNN representation with foundation
-    model knowledge.
+    Pools features to a manageable size before attention to avoid
+    the quadratic memory cost of full spatial attention.
+    
+    For 128x128 features → pool to 16x16 → attention on 256 tokens (feasible!)
     """
     
     def __init__(
@@ -50,15 +51,21 @@ class CrossAttentionFusion(nn.Module):
         cnn_channels: int,
         dino_channels: int,
         out_channels: int,
-        num_heads: int = 8
+        num_heads: int = 8,
+        pool_size: int = 16  # Attention computed on 16×16 = 256 tokens
     ):
         super().__init__()
+        
+        self.pool_size = pool_size
         
         # Project to common dimension
         self.cnn_proj = nn.Conv2d(cnn_channels, out_channels, 1)
         self.dino_proj = nn.Conv2d(dino_channels, out_channels, 1)
         
-        # Multi-head cross-attention
+        # Adaptive pooling before attention
+        self.pool = nn.AdaptiveAvgPool2d(pool_size)
+        
+        # Multi-head cross-attention (on pooled features)
         self.attention = nn.MultiheadAttention(
             embed_dim=out_channels,
             num_heads=num_heads,
@@ -76,9 +83,10 @@ class CrossAttentionFusion(nn.Module):
             nn.Linear(out_channels * 4, out_channels)
         )
         
-        # Output projection
-        self.out_proj = nn.Sequential(
-            nn.Conv2d(out_channels, out_channels, 3, padding=1),
+        # Upsample attention output back to original spatial size
+        # Then blend with original features
+        self.blend = nn.Sequential(
+            nn.Conv2d(out_channels * 2, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
@@ -102,15 +110,20 @@ class CrossAttentionFusion(nn.Module):
         cnn_proj = self.cnn_proj(cnn_features)  # B, C, H, W
         dino_proj = self.dino_proj(dino_features)  # B, C, H, W
         
-        # Reshape for attention: B, HW, C
-        cnn_flat = cnn_proj.flatten(2).permute(0, 2, 1)  # B, HW, C
-        dino_flat = dino_proj.flatten(2).permute(0, 2, 1)  # B, HW, C
+        # Pool for attention (reduces spatial dimensions)
+        cnn_pooled = self.pool(cnn_proj)  # B, C, pool_size, pool_size
+        dino_pooled = self.pool(dino_proj)  # B, C, pool_size, pool_size
+        
+        # Reshape for attention: B, pool_size^2, C
+        cnn_flat = cnn_pooled.flatten(2).permute(0, 2, 1)  # B, 256, C (if pool_size=16)
+        dino_flat = dino_pooled.flatten(2).permute(0, 2, 1)  # B, 256, C
         
         # Normalize
         cnn_normed = self.norm1(cnn_flat)
         dino_normed = self.norm1(dino_flat)
         
         # Cross-attention: CNN queries DINOv2 keys/values
+        # Only 256×256 attention matrix now! (vs 16,384×16,384 before)
         attended, _ = self.attention(
             query=cnn_normed,
             key=dino_normed,
@@ -124,10 +137,68 @@ class CrossAttentionFusion(nn.Module):
         fused_normed = self.norm2(fused)
         fused = fused + self.ffn(fused_normed)
         
-        # Reshape back: B, C, H, W
-        fused = fused.permute(0, 2, 1).reshape(B, -1, H, W)
+        # Reshape back: B, C, pool_size, pool_size
+        fused = fused.permute(0, 2, 1).reshape(B, -1, self.pool_size, self.pool_size)
         
-        return self.out_proj(fused)
+        # Upsample attention output to original spatial size
+        fused_upsampled = F.interpolate(
+            fused, size=(H, W), mode='bilinear', align_corners=False
+        )
+        
+        # Blend with original projected features
+        combined = torch.cat([cnn_proj, fused_upsampled], dim=1)
+        output = self.blend(combined)
+        
+        return output
+
+
+class SimpleFusion(nn.Module):
+    """
+    Simple and memory-efficient fusion via concatenation + convolution
+    
+    Most memory-efficient option - no attention mechanism at all.
+    Good baseline and fallback for extreme memory constraints.
+    """
+    
+    def __init__(
+        self,
+        cnn_channels: int,
+        dino_channels: int,
+        out_channels: int,
+        num_heads: int = 8  # Unused, kept for API compatibility
+    ):
+        super().__init__()
+        
+        # Concatenate and fuse with convolutions
+        self.fusion = nn.Sequential(
+            nn.Conv2d(cnn_channels + dino_channels, out_channels, 3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, 3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+    
+    def forward(
+        self,
+        cnn_features: torch.Tensor,
+        dino_features: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Args:
+            cnn_features: CNN features (B, C1, H, W)
+            dino_features: DINOv2 features (B, C2, H, W)
+        
+        Returns:
+            Fused features (B, out_channels, H, W)
+        """
+        # Simple concatenation + convolution
+        concatenated = torch.cat([cnn_features, dino_features], dim=1)
+        return self.fusion(concatenated)
+
+
+# For backward compatibility, keep old name but use new implementation
+CrossAttentionFusion = PooledAttentionFusion
 
 
 class HybridDINOv2(nn.Module):
@@ -146,6 +217,7 @@ class HybridDINOv2(nn.Module):
         dino_model: DINOv2 model size ('dinov2_vits14', 'dinov2_vitb14', 'dinov2_vitl14')
         freeze_dino: Freeze DINOv2 weights
         cnn_base_channels: Base channels for CNN branch
+        fusion_type: Fusion strategy ('pooled_attention' or 'simple')
     """
     
     def __init__(
@@ -154,12 +226,14 @@ class HybridDINOv2(nn.Module):
         num_classes: int = 1,
         dino_model: str = 'dinov2_vitb14',
         freeze_dino: bool = True,
-        cnn_base_channels: int = 64
+        cnn_base_channels: int = 64,
+        fusion_type: str = 'pooled_attention'
     ):
         super().__init__()
         
         self.in_channels = in_channels
         self.dino_model_name = dino_model
+        self.freeze_dino = freeze_dino
         
         # CNN Branch - processes all channels natively
         self.cnn_encoder = nn.Sequential(
@@ -212,14 +286,27 @@ class HybridDINOv2(nn.Module):
         self.dino_channels = dino_dims.get(dino_model, 768)
         self.dino_patch_size = 14
         
-        # Fusion module
+        # Fusion module - select based on fusion_type
         fusion_channels = cnn_base_channels * 4
-        self.fusion = CrossAttentionFusion(
-            cnn_channels=fusion_channels,
-            dino_channels=self.dino_channels,
-            out_channels=fusion_channels,
-            num_heads=8
-        )
+        
+        if fusion_type == 'simple':
+            print(f"Using SimpleFusion (memory-efficient, no attention)")
+            self.fusion = SimpleFusion(
+                cnn_channels=fusion_channels,
+                dino_channels=self.dino_channels,
+                out_channels=fusion_channels
+            )
+        elif fusion_type == 'pooled_attention':
+            print(f"Using PooledAttentionFusion (16×16 pooling, attention on 256 tokens)")
+            self.fusion = PooledAttentionFusion(
+                cnn_channels=fusion_channels,
+                dino_channels=self.dino_channels,
+                out_channels=fusion_channels,
+                num_heads=8,
+                pool_size=16
+            )
+        else:
+            raise ValueError(f"Unknown fusion_type: {fusion_type}. Use 'simple' or 'pooled_attention'")
         
         # Decoder
         self.decoder = nn.Sequential(
@@ -271,9 +358,12 @@ class HybridDINOv2(nn.Module):
         else:
             rgb_resized = rgb
         
-        # Get DINOv2 features
+        # Get DINOv2 features - ALWAYS disable gradients for frozen encoder
         if self.dino is not None:
-            with torch.set_grad_enabled(self.dino.training):
+            # Use no_grad() when frozen, enable gradients only when fine-tuning
+            should_compute_grads = not self.freeze_dino and self.training
+            
+            with torch.set_grad_enabled(should_compute_grads):
                 dino_output = self.dino.forward_features(rgb_resized)
                 # Extract patch tokens (exclude CLS token)
                 dino_features = dino_output['x_norm_patchtokens']  # B, N_patches, C
