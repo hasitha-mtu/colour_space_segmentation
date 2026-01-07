@@ -83,19 +83,19 @@ This is your **core contribution**. You need results before analyzing them.
 **Morning** - UNet baseline:✅
 ```bash
 # RGB baseline (2-3 hours)
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --data_dir dataset --model_type unet --feature_config rgb --batch_size 4 --epochs 100 --image_size 224 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --data_dir dataset --model_type unet --feature_config rgb --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 
 # All features (2-3 hours)
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_dir dataset --model_type unet --feature_config all --batch_size 4 --epochs 100 --image_size 224 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_dir dataset --model_type unet --feature_config all --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 ```
 
 **Afternoon** - DeepLabv3+ baseline:
 ```bash
 # RGB (3-4 hours)
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --data_dir dataset --model_type deeplabv3plus --feature_config rgb --batch_size 4 --epochs 100 --image_size 224 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --data_dir dataset --model_type deeplabv3plus --feature_config rgb --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 
 # All features (3-4 hours)
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_dir dataset --model_type deeplabv3plus --feature_config all --batch_size 4 --epochs 100 --image_size 224 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_dir dataset --model_type deeplabv3plus --feature_config all --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 ```
 
 **End of Day 1**: Check W&B dashboard, verify IoU scores are reasonable (>0.70)
@@ -107,10 +107,10 @@ $env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_d
 **Morning** - DINOv2:
 ```bash
 # RGB + DINOv2 (4-5 hours)
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_dinov2 --data_dir dataset --feature_config rgb --dino_model dinov2_vitb14 --freeze_dino --batch_size 4 --epochs 100 --image_size 224 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_dinov2 --data_dir dataset --feature_config rgb --dino_model dinov2_vitb14 --freeze_dino --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 
 # All features + DINOv2 (4-5 hours) - Run overnight
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_dinov2 --data_dir dataset --feature_config all --dino_model dinov2_vitb14 --freeze_dino --batch_size 4 --epochs 100 --image_size 224 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_dinov2 --data_dir dataset --feature_config all --dino_model dinov2_vitb14 --freeze_dino --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 ```
 
 ---
@@ -126,10 +126,10 @@ wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth -P che
 **Training**:
 ```bash
 # SAM Encoder + Decoder (5-6 hours)
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_sam --data_dir dataset --sam_type encoder --batch_size 4 --epochs 100 --image_size 224 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_sam --data_dir dataset --sam_type encoder --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 
 # SAM Fine-tuned (6-7 hours) - Run overnight
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_sam --data_dir dataset --sam_type finetuned --batch_size 4 --epochs 100 --image_size 224 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_sam --data_dir dataset --sam_type finetuned --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 ```
 
 ---
@@ -140,16 +140,16 @@ $env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_sam --data_dir da
 
 ```bash
 # UNet + Luminance only
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --model_type unet --feature_config luminance --batch_size 4 --image_size 224 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --model_type unet --feature_config luminance --batch_size 4 --image_size 512 --epochs 100
 
 # UNet + Chrominance only
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --model_type unet --feature_config chrominance --batch_size 4 --image_size 224 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --model_type unet --feature_config chrominance --batch_size 4 --image_size 512 --epochs 100
 
 # DeepLabv3+ + Luminance
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --model_type deeplabv3plus --feature_config luminance --batch_size 4 --image_size 224 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --model_type deeplabv3plus --feature_config luminance --batch_size 4 --image_size 512 --epochs 100
 
 # DeepLabv3+ + Chrominance
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --model_type deeplabv3plus --feature_config chrominance --batch_size 4 --image_size 224 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --model_type deeplabv3plus --feature_config chrominance --batch_size 4 --image_size 512 --epochs 100
 ```
 
 ---
@@ -160,10 +160,10 @@ Only if time permits and results look interesting:
 
 ```bash
 # DINOv2 + Luminance
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_dinov2 --feature_config luminance --freeze_dino --batch_size 4 --image_size 224 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_dinov2 --feature_config luminance --freeze_dino --batch_size 4 --image_size 512 --epochs 100
 
 # DINOv2 + Chrominance
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_dinov2 --feature_config chrominance --freeze_dino --batch_size 4 --image_size 224 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_dinov2 --feature_config chrominance --freeze_dino --batch_size 4 --image_size 512 --epochs 100
 ```
 
 ---
