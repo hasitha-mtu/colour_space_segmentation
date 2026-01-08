@@ -15,7 +15,7 @@ Reference: Kirillov et al. "Segment Anything" (2023)
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, List
 
 try:
     from segment_anything import sam_model_registry
@@ -31,6 +31,10 @@ class SAMEncoderDecoder(nn.Module):
     
     Uses SAM's ViT encoder (frozen) to extract features, then applies
     a lightweight decoder for binary water segmentation.
+    
+    IMPORTANT: SAM's image encoder has fixed positional embeddings for 1024x1024 input.
+    Input images are always resized to 1024x1024, producing 64x64 feature maps.
+    The decoder then upsamples back to the desired output size.
     
     Args:
         sam_checkpoint: Path to SAM checkpoint (.pth file)
@@ -70,12 +74,12 @@ class SAMEncoderDecoder(nn.Module):
             print("✓ SAM encoder frozen")
         
         # SAM encoder output: 256 channels at 64x64 for 1024x1024 input
-        # For our 512x512 input, output will be 32x32
+        # MUST use 1024x1024 input due to fixed positional embeddings
         sam_out_channels = 256
         
-        # Lightweight decoder
+        # Lightweight decoder: 64x64 -> 512x512 (8x upsampling, 3 stages)
         self.decoder = nn.Sequential(
-            # 32x32 -> 64x64
+            # 64x64 -> 128x128
             nn.ConvTranspose2d(sam_out_channels, decoder_channels, 3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm2d(decoder_channels),
             nn.ReLU(inplace=True),
@@ -83,7 +87,7 @@ class SAMEncoderDecoder(nn.Module):
             nn.BatchNorm2d(decoder_channels),
             nn.ReLU(inplace=True),
             
-            # 64x64 -> 128x128
+            # 128x128 -> 256x256
             nn.ConvTranspose2d(decoder_channels, decoder_channels // 2, 3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm2d(decoder_channels // 2),
             nn.ReLU(inplace=True),
@@ -91,7 +95,7 @@ class SAMEncoderDecoder(nn.Module):
             nn.BatchNorm2d(decoder_channels // 2),
             nn.ReLU(inplace=True),
             
-            # 128x128 -> 256x256
+            # 256x256 -> 512x512
             nn.ConvTranspose2d(decoder_channels // 2, decoder_channels // 4, 3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm2d(decoder_channels // 4),
             nn.ReLU(inplace=True),
@@ -99,13 +103,8 @@ class SAMEncoderDecoder(nn.Module):
             nn.BatchNorm2d(decoder_channels // 4),
             nn.ReLU(inplace=True),
             
-            # 256x256 -> 512x512
-            nn.ConvTranspose2d(decoder_channels // 4, decoder_channels // 8, 3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm2d(decoder_channels // 8),
-            nn.ReLU(inplace=True),
-            
             # Final prediction
-            nn.Conv2d(decoder_channels // 8, 1, 1),
+            nn.Conv2d(decoder_channels // 4, 1, 1),
             nn.Sigmoid()
         )
     
@@ -125,20 +124,17 @@ class SAMEncoderDecoder(nn.Module):
         B, C, H, W = x.shape
         original_size = (H, W)
         
-        # SAM expects 1024x1024 input
-        # For efficiency, we resize to 512x512
-        target_size = 512
-        if H != target_size or W != target_size:
-            x_resized = F.interpolate(x, size=(target_size, target_size), mode='bilinear', align_corners=False)
-        else:
-            x_resized = x
+        # SAM REQUIRES 1024x1024 input (fixed positional embeddings)
+        # Cannot use smaller sizes without modifying the encoder
+        sam_input_size = 1024
+        x_resized = F.interpolate(x, size=(sam_input_size, sam_input_size), mode='bilinear', align_corners=False)
         
-        # SAM encoder
-        with torch.set_grad_enabled(self.image_encoder.training):
-            features = self.image_encoder(x_resized)  # B, 256, 32, 32 (for 512 input)
+        # SAM encoder (frozen, no gradients needed)
+        with torch.no_grad():
+            features = self.image_encoder(x_resized)  # B, 256, 64, 64
         
-        # Decode
-        output = self.decoder(features)
+        # Decode: 64x64 -> 512x512
+        output = self.decoder(features)  # B, 1, 512, 512
         
         # Resize to original size if needed
         if output.shape[2:] != original_size:
@@ -159,6 +155,10 @@ class SAMFineTuned(nn.Module):
     
     This allows the mask decoder to adapt to water segmentation
     while leveraging SAM's powerful pretrained encoder.
+    
+    IMPORTANT: SAM's mask decoder was designed for single-image-multiple-prompts,
+    not batch-of-images. We handle batching by processing images individually
+    then concatenating results.
     
     Args:
         sam_checkpoint: Path to SAM checkpoint
@@ -193,15 +193,65 @@ class SAMFineTuned(nn.Module):
         print("✓ Mask decoder trainable")
         
         # Learnable prompt embeddings (replace point/box prompts)
-        # These are learned during training
+        # Shape: (1, 1, 256) - single prompt token
         self.learnable_prompt = nn.Parameter(torch.randn(1, 1, 256))
         
         # Output post-processing
         self.sigmoid = nn.Sigmoid()
     
+    def _decode_single_image(
+        self,
+        image_embedding: torch.Tensor,
+        image_pe: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Decode mask for a single image embedding.
+        
+        SAM's mask decoder expects:
+        - image_embeddings: (1, 256, H, W)
+        - image_pe: (1, 256, H, W)
+        - sparse_prompt_embeddings: (1, N_prompts, 256)
+        - dense_prompt_embeddings: (1, 256, H, W)
+        
+        Args:
+            image_embedding: Single image embedding (1, 256, H, W)
+            image_pe: Positional encoding (1, 256, H, W)
+        
+        Returns:
+            Low resolution mask (1, 1, H_low, W_low)
+        """
+        # Sparse embeddings: our learnable prompt (1, 1, 256)
+        sparse_embeddings = self.learnable_prompt
+        
+        # Dense embeddings: zeros (no additional spatial guidance)
+        dense_embeddings = torch.zeros(
+            1,
+            256,
+            image_embedding.shape[2],
+            image_embedding.shape[3],
+            device=image_embedding.device,
+            dtype=image_embedding.dtype
+        )
+        
+        # Decode mask
+        low_res_mask, _ = self.sam.mask_decoder(
+            image_embeddings=image_embedding,
+            image_pe=image_pe,
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=False
+        )
+        
+        return low_res_mask
+    
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass
+        
+        SAM's mask decoder doesn't support standard batched inference.
+        It was designed for single-image-multiple-prompts, not batch-of-images.
+        We handle this by encoding all images together (efficient), then
+        decoding each image individually (necessary for correctness).
         
         Args:
             x: RGB input (B, 3, H, W)
@@ -219,30 +269,27 @@ class SAMFineTuned(nn.Module):
         target_size = 1024
         x_resized = F.interpolate(x, size=(target_size, target_size), mode='bilinear', align_corners=False)
         
-        # Encode image
+        # Encode all images at once (batched encoding is supported)
         with torch.no_grad():
-            image_embeddings = self.sam.image_encoder(x_resized)
+            image_embeddings = self.sam.image_encoder(x_resized)  # (B, 256, 64, 64)
         
-        # Use learnable prompts (no explicit point/box prompts)
-        prompt_embeddings = self.learnable_prompt.expand(B, -1, -1)
+        # Get positional encoding (same for all images)
+        image_pe = self.sam.prompt_encoder.get_dense_pe()  # (1, 256, 64, 64)
         
-        # Get sparse and dense embeddings from prompt encoder
-        with torch.no_grad():
-            sparse_embeddings = self.sam.prompt_encoder.not_a_point_embed.weight.reshape(1, -1, 1, 1)
-            sparse_embeddings = sparse_embeddings.expand(B, -1, -1, -1)
+        # Decode each image individually
+        # SAM's mask decoder uses repeat_interleave internally which breaks with batch > 1
+        low_res_masks_list: List[torch.Tensor] = []
+        
+        for i in range(B):
+            # Extract single image embedding
+            img_embed = image_embeddings[i:i+1]  # (1, 256, 64, 64)
             
-            # No dense embeddings for this simple case
-            dense_embeddings = self.sam.prompt_encoder.no_mask_embed.weight.reshape(1, -1, 1, 1)
-            dense_embeddings = dense_embeddings.expand(B, -1, image_embeddings.shape[-2], image_embeddings.shape[-1])
+            # Decode single image
+            low_res_mask = self._decode_single_image(img_embed, image_pe)
+            low_res_masks_list.append(low_res_mask)
         
-        # Decode mask
-        low_res_masks, _ = self.sam.mask_decoder(
-            image_embeddings=image_embeddings,
-            image_pe=self.sam.prompt_encoder.get_dense_pe(),
-            sparse_prompt_embeddings=sparse_embeddings,
-            dense_prompt_embeddings=dense_embeddings,
-            multimask_output=False
-        )
+        # Concatenate all masks
+        low_res_masks = torch.cat(low_res_masks_list, dim=0)  # (B, 1, H_low, W_low)
         
         # Upsample to target size
         masks = F.interpolate(
