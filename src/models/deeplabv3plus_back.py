@@ -67,7 +67,7 @@ class DeepLabV3Plus(nn.Module):
         # Replace classifier head for binary segmentation
         # DeepLabv3 has classifier and aux_classifier
         self.model.classifier[-1] = nn.Conv2d(256, num_classes, kernel_size=1)
-        if hasattr(self.model, 'aux_classifier') and self.model.aux_classifier is not None:
+        if hasattr(self.model, 'aux_classifier'):
             self.model.aux_classifier[-1] = nn.Conv2d(256, num_classes, kernel_size=1)
         
         # Add sigmoid activation
