@@ -140,16 +140,16 @@ $env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_sam --data_dir da
 
 ```bash
 # UNet + Luminance only
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --model_type unet --data_dir dataset --feature_config luminance --batch_size 4 --image_size 512 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --model_type unet --data_dir dataset --feature_config luminance --batch_size 4 --image_size 512 --epochs 100 --use_wandb 
 
 # UNet + Chrominance only
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --model_type unet --data_dir dataset --feature_config chrominance --batch_size 4 --image_size 512 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --model_type unet --data_dir dataset --feature_config chrominance --batch_size 4 --image_size 512 --epochs 100 --use_wandb
 
 # DeepLabv3+ + Luminance
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --model_type deeplabv3plus --data_dir dataset --feature_config luminance --batch_size 4 --image_size 512 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --model_type deeplabv3plus --data_dir dataset --feature_config luminance --batch_size 4 --image_size 512 --epochs 100 --use_wandb
 
 # DeepLabv3+ + Chrominance
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --model_type deeplabv3plus --data_dir dataset --feature_config chrominance --batch_size 4 --image_size 512 --epochs 100
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --model_type deeplabv3plus --data_dir dataset --feature_config chrominance --batch_size 4 --image_size 512 --epochs 100 --use_wandb
 ```
 
 ---
