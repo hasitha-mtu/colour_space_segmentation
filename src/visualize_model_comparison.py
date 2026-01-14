@@ -639,7 +639,7 @@ def main():
     OUTPUT_DIR = "./experiment/visualizations/deeplabv3plus"
     
     # How many samples to visualize (set to None for all)
-    NUM_SAMPLES = 10
+    NUM_SAMPLES = None
     
     print("="*60)
     print("DeepLabv3+ Model Comparison Visualization")
