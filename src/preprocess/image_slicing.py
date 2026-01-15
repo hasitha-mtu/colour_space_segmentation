@@ -59,7 +59,7 @@ def slice_images(input_dir, output_dir, tile_size=512, stride=400, bg_threshold=
 def main():
     # Run for all sets
     for s in ['train', 'val', 'test']:
-        slice_images(input_dir=f'./dataset/split_stratified/{s}', output_dir=f'./dataset/data_sliced/{s}')
+        slice_images(input_dir=f'./dataset/split_stratified/{s}', output_dir=f'./dataset/data_sliced/{s}', tile_size=1024)
 
 
 if __name__ == "__main__":
