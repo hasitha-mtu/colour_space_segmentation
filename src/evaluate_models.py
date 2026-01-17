@@ -272,44 +272,77 @@ class ModelEvaluator:
         print(f"\nEvaluating {model_name}...")
         
         with torch.no_grad():
-            for images, masks in tqdm(dataloader, desc=f"  Processing"):
-                images = images.to(self.device)
-                masks_np = masks.numpy()
-                
-                # Time inference
-                start_time = time.time()
-                
-                if self.device == 'cuda':
-                    torch.cuda.synchronize()
-                
-                outputs = model(images)
-                
-                if self.device == 'cuda':
-                    torch.cuda.synchronize()
-                
-                inference_time = time.time() - start_time
-                inference_times.append(inference_time / images.shape[0])  # Per image
-                
-                # Move to CPU
-                outputs_np = outputs.cpu().numpy()
-                
-                # Compute metrics for each image in batch
-                for i in range(images.shape[0]):
-                    pred = outputs_np[i, 0]  # Remove channel dim
-                    target = masks_np[i, 0]
+            for batch_idx, batch_data in enumerate(tqdm(dataloader, desc=f"  Processing")):
+                try:
+                    # Handle flexible unpacking (dataloader might return 2 or 3+ values)
+                    if isinstance(batch_data, (list, tuple)):
+                        if len(batch_data) == 2:
+                            images, masks = batch_data
+                        elif len(batch_data) >= 3:
+                            # If dataloader returns (images, masks, metadata), just take first 2
+                            images, masks = batch_data[0], batch_data[1]
+                        else:
+                            raise ValueError(f"Unexpected batch data length: {len(batch_data)}")
+                    else:
+                        raise ValueError(f"Unexpected batch data type: {type(batch_data)}")
                     
-                    # IoU and Dice
-                    iou = metrics.compute_iou(pred, target)
-                    dice = metrics.compute_dice(pred, target)
-                    boundary_iou = metrics.compute_boundary_iou(pred, target)
+                    images = images.to(self.device)
+                    masks_np = masks.numpy()
                     
-                    all_ious.append(iou)
-                    all_dices.append(dice)
-                    all_boundary_ious.append(boundary_iou)
+                    # Time inference
+                    start_time = time.time()
                     
-                    # Confusion matrix
-                    cm = metrics.compute_confusion_matrix(pred, target)
-                    all_cms.append(cm)
+                    if self.device == 'cuda':
+                        torch.cuda.synchronize()
+                    
+                    outputs = model(images)
+                    
+                    # Handle different output formats
+                    if isinstance(outputs, dict):
+                        # DeepLabv3+ might return dict with 'out' and 'aux'
+                        outputs = outputs['out']
+                    elif isinstance(outputs, (tuple, list)):
+                        # If model returns tuple/list, take first element
+                        outputs = outputs[0]
+                    
+                    if self.device == 'cuda':
+                        torch.cuda.synchronize()
+                    
+                    inference_time = time.time() - start_time
+                    inference_times.append(inference_time / images.shape[0])  # Per image
+                    
+                    # Move to CPU
+                    outputs_np = outputs.cpu().numpy()
+                    
+                    # Compute metrics for each image in batch
+                    for i in range(images.shape[0]):
+                        pred = outputs_np[i, 0]  # Remove channel dim
+                        target = masks_np[i, 0]
+                        
+                        # IoU and Dice
+                        iou = metrics.compute_iou(pred, target)
+                        dice = metrics.compute_dice(pred, target)
+                        boundary_iou = metrics.compute_boundary_iou(pred, target)
+                        
+                        all_ious.append(iou)
+                        all_dices.append(dice)
+                        all_boundary_ious.append(boundary_iou)
+                        
+                        # Confusion matrix
+                        cm = metrics.compute_confusion_matrix(pred, target)
+                        all_cms.append(cm)
+                
+                except Exception as e:
+                    print(f"\n✗ Error in batch {batch_idx}:")
+                    print(f"  Batch data type: {type(batch_data)}")
+                    if isinstance(batch_data, (list, tuple)):
+                        print(f"  Batch data length: {len(batch_data)}")
+                        for idx, item in enumerate(batch_data):
+                            print(f"  Item {idx}: type={type(item)}, shape={item.shape if hasattr(item, 'shape') else 'N/A'}")
+                    print(f"  Error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    raise
         
         # Aggregate confusion matrices
         total_cm = {
@@ -380,7 +413,7 @@ class ModelEvaluator:
                 )
                 
                 # Get appropriate dataloader
-                _, val_loader = get_dataloaders(
+                dataloaders_result = get_dataloaders(
                     data_root=self.data_dir,
                     feature_config=feature_config,
                     batch_size=self.batch_size,
@@ -390,6 +423,8 @@ class ModelEvaluator:
                     seed=42,
                     normalize=True
                 )
+                # Extract val_loader (handles 2 or 3 return values)
+                val_loader = dataloaders_result[1] if isinstance(dataloaders_result, (list, tuple)) and len(dataloaders_result) >= 2 else dataloaders_result
                 
                 # Evaluate
                 model_name = f"UNet-{feature_config}"
@@ -402,6 +437,8 @@ class ModelEvaluator:
                 
             except Exception as e:
                 print(f"✗ Error evaluating UNet-{feature_config}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         # ============================================================
@@ -426,7 +463,7 @@ class ModelEvaluator:
                     checkpoint_path=checkpoint_path
                 )
                 
-                _, val_loader = get_dataloaders(
+                dataloaders_result = get_dataloaders(
                     data_root=self.data_dir,
                     feature_config=feature_config,
                     batch_size=self.batch_size,
@@ -436,6 +473,7 @@ class ModelEvaluator:
                     seed=42,
                     normalize=True
                 )
+                val_loader = dataloaders_result[1] if isinstance(dataloaders_result, (list, tuple)) and len(dataloaders_result) >= 2 else dataloaders_result
                 
                 model_name = f"DeepLabv3+-{feature_config}"
                 results = self._evaluate_single_model(model, val_loader, model_name)
@@ -447,6 +485,8 @@ class ModelEvaluator:
                 
             except Exception as e:
                 print(f"✗ Error evaluating DeepLabv3+-{feature_config}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         # ============================================================
@@ -474,7 +514,7 @@ class ModelEvaluator:
                     freeze_dino=True
                 )
                 
-                _, val_loader = get_dataloaders(
+                dataloaders_result = get_dataloaders(
                     data_root=self.data_dir,
                     feature_config=feature_config,
                     batch_size=self.batch_size,
@@ -484,6 +524,7 @@ class ModelEvaluator:
                     seed=42,
                     normalize=False  # DINOv2 handles normalization
                 )
+                val_loader = dataloaders_result[1] if isinstance(dataloaders_result, (list, tuple)) and len(dataloaders_result) >= 2 else dataloaders_result
                 
                 model_name = f"DINOv2-{feature_config}"
                 results = self._evaluate_single_model(model, val_loader, model_name)
@@ -495,6 +536,8 @@ class ModelEvaluator:
                 
             except Exception as e:
                 print(f"✗ Error evaluating DINOv2-{feature_config}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         # ============================================================
@@ -527,7 +570,7 @@ class ModelEvaluator:
                     sam_model_type=model_variant
                 )
                 
-                _, val_loader = get_dataloaders(
+                dataloaders_result = get_dataloaders(
                     data_root=self.data_dir,
                     feature_config='rgb',
                     batch_size=self.batch_size,
@@ -537,6 +580,7 @@ class ModelEvaluator:
                     seed=42,
                     normalize=False  # SAM handles normalization
                 )
+                val_loader = dataloaders_result[1] if isinstance(dataloaders_result, (list, tuple)) and len(dataloaders_result) >= 2 else dataloaders_result
                 
                 model_name = f"SAM-{sam_type}-{model_variant}"
                 results = self._evaluate_single_model(model, val_loader, model_name)
@@ -548,6 +592,8 @@ class ModelEvaluator:
                 
             except Exception as e:
                 print(f"✗ Error evaluating SAM-{sam_type}-{model_variant}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         # ============================================================
