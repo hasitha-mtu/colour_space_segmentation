@@ -190,7 +190,7 @@ class FailureModeAnalyzer:
             raise ValueError(f"Unknown model type: {model_type}")
         
         # Load weights
-        checkpoint = torch.load(model_path, map_location=self.device)
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         model.load_state_dict(checkpoint)
         model = model.to(self.device)
         model.eval()
