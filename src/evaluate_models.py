@@ -274,8 +274,20 @@ class ModelEvaluator:
         with torch.no_grad():
             for batch_idx, batch_data in enumerate(tqdm(dataloader, desc=f"  Processing")):
                 try:
-                    # Handle flexible unpacking (dataloader might return 2 or 3+ values)
-                    if isinstance(batch_data, (list, tuple)):
+                    # Handle flexible unpacking - dict, tuple, or list
+                    if isinstance(batch_data, dict):
+                        # Dictionary format: {'image': tensor, 'mask': tensor}
+                        if 'image' in batch_data and 'mask' in batch_data:
+                            images = batch_data['image']
+                            masks = batch_data['mask']
+                        elif 'images' in batch_data and 'masks' in batch_data:
+                            images = batch_data['images']
+                            masks = batch_data['masks']
+                        else:
+                            raise ValueError(f"Unknown dict keys: {list(batch_data.keys())}")
+                    
+                    elif isinstance(batch_data, (list, tuple)):
+                        # Tuple/list format: (image, mask) or (image, mask, metadata)
                         if len(batch_data) == 2:
                             images, masks = batch_data
                         elif len(batch_data) >= 3:
@@ -335,7 +347,14 @@ class ModelEvaluator:
                 except Exception as e:
                     print(f"\n✗ Error in batch {batch_idx}:")
                     print(f"  Batch data type: {type(batch_data)}")
-                    if isinstance(batch_data, (list, tuple)):
+                    if isinstance(batch_data, dict):
+                        print(f"  Dict keys: {list(batch_data.keys())}")
+                        for key, value in batch_data.items():
+                            if hasattr(value, 'shape'):
+                                print(f"  {key}: shape={value.shape}, dtype={value.dtype}")
+                            else:
+                                print(f"  {key}: type={type(value)}")
+                    elif isinstance(batch_data, (list, tuple)):
                         print(f"  Batch data length: {len(batch_data)}")
                         for idx, item in enumerate(batch_data):
                             print(f"  Item {idx}: type={type(item)}, shape={item.shape if hasattr(item, 'shape') else 'N/A'}")

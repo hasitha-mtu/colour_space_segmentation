@@ -31,7 +31,7 @@ try:
     
     # Test with minimal parameters
     result = get_dataloaders(
-        data_root='data',
+        data_root='dataset/test',
         feature_config='rgb',
         batch_size=2,
         num_workers=0,  # Use 0 for debugging
@@ -66,7 +66,31 @@ try:
     
     print(f"Batch data type: {type(batch_data)}")
     
-    if isinstance(batch_data, (list, tuple)):
+    if isinstance(batch_data, dict):
+        print(f"Batch data is a dictionary with keys: {list(batch_data.keys())}")
+        
+        # Extract images and masks from dict
+        if 'image' in batch_data and 'mask' in batch_data:
+            images = batch_data['image']
+            masks = batch_data['mask']
+            print(f"\n✓ Successfully extracted from dict")
+            print(f"  Images key: 'image'")
+            print(f"  Masks key: 'mask'")
+        elif 'images' in batch_data and 'masks' in batch_data:
+            images = batch_data['images']
+            masks = batch_data['masks']
+            print(f"\n✓ Successfully extracted from dict")
+            print(f"  Images key: 'images'")
+            print(f"  Masks key: 'masks'")
+        else:
+            print(f"\n✗ ERROR: Unknown dict keys. Expected 'image'/'mask' or 'images'/'masks'")
+            print(f"  Available keys: {list(batch_data.keys())}")
+            sys.exit(1)
+        
+        print(f"\nImages: shape={images.shape}, dtype={images.dtype}")
+        print(f"Masks: shape={masks.shape}, dtype={masks.dtype}")
+        
+    elif isinstance(batch_data, (list, tuple)):
         print(f"Batch data length: {len(batch_data)}")
         for i, item in enumerate(batch_data):
             if hasattr(item, 'shape'):
@@ -91,7 +115,7 @@ try:
         print(f"Masks: shape={masks.shape}, dtype={masks.dtype}")
         
     else:
-        print(f"✗ ERROR: Expected tuple/list from dataloader, got {type(batch_data)}")
+        print(f"✗ ERROR: Expected tuple/list/dict from dataloader, got {type(batch_data)}")
         sys.exit(1)
 
 except Exception as e:
@@ -204,13 +228,20 @@ print("="*70)
 print("\n✓ All critical tests passed!")
 print("\nYour setup:")
 print(f"  - Dataloader returns: {len(result)} values")
-print(f"  - Batch contains: {len(batch_data)} items")
+if isinstance(batch_data, dict):
+    print(f"  - Batch format: Dictionary with keys {list(batch_data.keys())}")
+else:
+    print(f"  - Batch contains: {len(batch_data)} items")
 print(f"  - Images shape: {images.shape}")
 print(f"  - Masks shape: {masks.shape}")
 print(f"  - UNet output: {outputs.shape}")
 
 print("\nRecommendations:")
-if len(batch_data) > 2:
+if isinstance(batch_data, dict):
+    print(f"  ✓ Dataloader returns dictionary format")
+    print(f"    Keys used: 'image' and 'mask'")
+    print(f"    This is NORMAL and handled correctly")
+elif len(batch_data) > 2:
     print(f"  ⚠ Your dataloader returns {len(batch_data)} values")
     print(f"    Evaluation script will use first 2 (images, masks)")
     print(f"    This is NORMAL and handled correctly")
