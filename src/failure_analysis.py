@@ -189,10 +189,6 @@ class FailureModeAnalyzer:
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         
-        # Load weights
-        # checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
-        # model.load_state_dict(checkpoint)
-
         # Load checkpoint
         if model_path.exists():
             checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
@@ -233,8 +229,7 @@ class FailureModeAnalyzer:
                 raise
         else:
             raise FileNotFoundError(f"Checkpoint not found: {model_path}")
-
-
+        
         model = model.to(self.device)
         model.eval()
         
@@ -262,7 +257,7 @@ class FailureModeAnalyzer:
         model = self._load_model(model_path, model_config)
         
         # Get dataloader
-        _, val_loader = get_dataloaders(
+        dataloaders_result = get_dataloaders(
             data_root=self.data_dir,
             feature_config=model_config['feature_config'],
             batch_size=1,  # Process one at a time for scene analysis
@@ -272,6 +267,7 @@ class FailureModeAnalyzer:
             seed=42,
             normalize=model_config.get('normalize', True)
         )
+        val_loader = dataloaders_result[1] if isinstance(dataloaders_result, (list, tuple)) and len(dataloaders_result) >= 2 else dataloaders_result
         
         # Accumulators by difficulty
         results_by_difficulty = {
@@ -286,9 +282,18 @@ class FailureModeAnalyzer:
         print(f"\nAnalyzing {model_config['name']}...")
         
         with torch.no_grad():
-            for idx, (image, mask) in enumerate(tqdm(val_loader, desc="  Processing", total=n_samples)):
+            for idx, batch_data in enumerate(tqdm(val_loader, desc="  Processing", total=n_samples)):
                 if idx >= n_samples:
                     break
+                
+                # Extract image and mask from batch (handle dict or tuple format)
+                if isinstance(batch_data, dict):
+                    image = batch_data['image']
+                    mask = batch_data['mask']
+                elif isinstance(batch_data, (list, tuple)):
+                    image, mask = batch_data[0], batch_data[1]
+                else:
+                    raise ValueError(f"Unexpected batch data type: {type(batch_data)}")
                 
                 # Convert to numpy for analysis
                 image_np = (image[0].permute(1, 2, 0).numpy() * 255).astype(np.uint8)
@@ -378,7 +383,7 @@ class FailureModeAnalyzer:
         model = self._load_model(model_path, model_config)
         
         # Get dataloader
-        _, val_loader = get_dataloaders(
+        dataloaders_result = get_dataloaders(
             data_root=self.data_dir,
             feature_config=model_config['feature_config'],
             batch_size=1,
@@ -388,6 +393,7 @@ class FailureModeAnalyzer:
             seed=42,
             normalize=model_config.get('normalize', True)
         )
+        val_loader = dataloaders_result[1] if isinstance(dataloaders_result, (list, tuple)) and len(dataloaders_result) >= 2 else dataloaders_result
         
         # Collect predictions with IoUs
         predictions = []
@@ -395,9 +401,18 @@ class FailureModeAnalyzer:
         print(f"\nGenerating predictions for {model_config['name']}...")
         
         with torch.no_grad():
-            for idx, (image, mask) in enumerate(tqdm(val_loader, desc="  Predicting")):
+            for idx, batch_data in enumerate(tqdm(val_loader, desc="  Predicting")):
                 if idx >= 50:  # Limit to first 50 for speed
                     break
+                
+                # Extract image and mask from batch (handle dict or tuple format)
+                if isinstance(batch_data, dict):
+                    image = batch_data['image']
+                    mask = batch_data['mask']
+                elif isinstance(batch_data, (list, tuple)):
+                    image, mask = batch_data[0], batch_data[1]
+                else:
+                    raise ValueError(f"Unexpected batch data type: {type(batch_data)}")
                 
                 # Predict
                 image_tensor = image.to(self.device)
