@@ -85,7 +85,7 @@ def run_command(cmd, description):
         return False
 
 
-def check_prerequisites():
+def check_prerequisites(dataset_path):
     """Check that required files and directories exist"""
     print_header("Checking Prerequisites")
     
@@ -93,11 +93,11 @@ def check_prerequisites():
     
     # Check if scripts exist
     scripts = [
-        'evaluate_models.py',
-        'statistical_analysis.py',
-        'visualize_results.py',
-        'failure_analysis.py',
-        'generate_report.py'
+        'src/evaluate_models.py',
+        'src/statistical_analysis.py',
+        'src/visualize_results.py',
+        'src/failure_analysis.py',
+        'src/generate_report.py'
     ]
     
     print("Checking analysis scripts...")
@@ -137,7 +137,7 @@ def check_prerequisites():
     
     # Check data directory
     print("\nChecking data directory...")
-    data_dir = Path('data')
+    data_dir = Path(dataset_path)
     if not data_dir.exists():
         print_error(f"Data directory not found: {data_dir}")
         all_ok = False
@@ -193,7 +193,7 @@ Examples:
     print(f"Skip failure analysis: {args.skip_failure_analysis}")
     
     # Check prerequisites
-    if not check_prerequisites():
+    if not check_prerequisites(args.data_dir):
         return 1
     
     # Determine total steps
@@ -209,7 +209,7 @@ Examples:
     print("Computing comprehensive metrics for all trained models...")
     
     cmd = [
-        sys.executable, 'evaluate_models.py',
+        sys.executable, 'src/evaluate_models.py',
         '--results_dir', args.results_dir,
         '--data_dir', args.data_dir
     ]
@@ -231,7 +231,7 @@ Examples:
     print("Testing statistical significance of performance differences...")
     
     cmd = [
-        sys.executable, 'statistical_analysis.py',
+        sys.executable, 'src/statistical_analysis.py',
         '--results_csv', 'model_evaluation_results.csv',
         '--output_json', 'statistical_analysis.json'
     ]
@@ -245,7 +245,7 @@ Examples:
     print("Generating publication-quality figures...")
     
     cmd = [
-        sys.executable, 'visualize_results.py',
+        sys.executable, 'src/visualize_results.py',
         '--results_csv', 'model_evaluation_results.csv',
         '--output_dir', 'figures'
     ]
@@ -261,7 +261,7 @@ Examples:
         print_warning("This step may take 30-60 minutes")
         
         cmd = [
-            sys.executable, 'failure_analysis.py',
+            sys.executable, 'src/failure_analysis.py',
             '--data_dir', args.data_dir,
             '--output_dir', 'failure_analysis'
         ]
@@ -280,7 +280,7 @@ Examples:
     print("Generating comprehensive analysis report...")
     
     cmd = [
-        sys.executable, 'generate_report.py',
+        sys.executable, 'src/generate_report.py',
         '--results_csv', 'model_evaluation_results.csv',
         '--stats_json', 'statistical_analysis.json',
         '--output_file', 'comprehensive_report.md'

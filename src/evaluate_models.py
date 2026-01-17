@@ -208,9 +208,42 @@ class ModelEvaluator:
         
         # Load checkpoint
         if checkpoint_path.exists():
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
-            model.load_state_dict(checkpoint)
-            print(f"✓ Loaded checkpoint: {checkpoint_path.name}")
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+            
+            # Handle different checkpoint formats
+            state_dict_to_load = None
+            
+            if isinstance(checkpoint, dict):
+                if 'model_state_dict' in checkpoint:
+                    # Checkpoint saved with metadata (epoch, optimizer, etc.)
+                    state_dict_to_load = checkpoint['model_state_dict']
+                    print(f"✓ Loaded checkpoint (with metadata): {checkpoint_path.name}")
+                elif 'state_dict' in checkpoint:
+                    # Alternative format
+                    state_dict_to_load = checkpoint['state_dict']
+                    print(f"✓ Loaded checkpoint (with state_dict): {checkpoint_path.name}")
+                else:
+                    # Assume it's a raw state dict
+                    state_dict_to_load = checkpoint
+                    print(f"✓ Loaded checkpoint (raw): {checkpoint_path.name}")
+            else:
+                # Fallback - try loading directly
+                state_dict_to_load = checkpoint
+                print(f"✓ Loaded checkpoint: {checkpoint_path.name}")
+            
+            # Load with strict=False to handle architecture mismatches
+            # (e.g., aux_classifier present in trained model but not needed for inference)
+            try:
+                missing_keys, unexpected_keys = model.load_state_dict(state_dict_to_load, strict=False)
+                
+                if unexpected_keys:
+                    print(f"  ⚠ Ignoring unexpected keys: {len(unexpected_keys)} keys (e.g., aux_classifier)")
+                if missing_keys:
+                    print(f"  ⚠ Warning: Missing keys in checkpoint: {missing_keys[:5]}...")
+                    
+            except Exception as e:
+                print(f"  ✗ Error loading state dict: {e}")
+                raise
         else:
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
         
@@ -423,9 +456,9 @@ class ModelEvaluator:
         print("EVALUATING FOUNDATION MODEL: DINOv2")
         print("="*70)
         
-        for config_name in ['rgb-frozen', 'all-frozen']:
-            feature_config = config_name.split('-')[0]
-            checkpoint_dir = self.results_dir / 'dinov2' / config_name / 'checkpoints'
+        for feature_config in ['rgb', 'all']:
+            # Path structure: dinov2/rgb/frozen/checkpoints or dinov2/all/frozen/checkpoints
+            checkpoint_dir = self.results_dir / 'dinov2' / feature_config / 'frozen' / 'checkpoints'
             checkpoint_path = checkpoint_dir / 'best_model.pth'
             
             if not checkpoint_path.exists():
@@ -472,12 +505,13 @@ class ModelEvaluator:
         print("="*70)
         
         sam_configs = [
-            ('encoder-vit_b', 'sam_encoder'),
-            ('finetuned-vit_b', 'sam_finetuned')
+            ('encoder', 'vit_b', 'sam_encoder'),
+            ('finetuned', 'vit_b', 'sam_finetuned')
         ]
         
-        for config_name, model_type in sam_configs:
-            checkpoint_dir = self.results_dir / 'sam' / config_name / 'checkpoints'
+        for sam_type, model_variant, model_type in sam_configs:
+            # Path structure: sam/encoder/vit_b/checkpoints or sam/finetuned/vit_b/checkpoints
+            checkpoint_dir = self.results_dir / 'sam' / sam_type / model_variant / 'checkpoints'
             checkpoint_path = checkpoint_dir / 'best_model.pth'
             
             if not checkpoint_path.exists():
@@ -490,7 +524,7 @@ class ModelEvaluator:
                     feature_config='rgb',  # SAM only works with RGB
                     checkpoint_path=checkpoint_path,
                     sam_checkpoint='checkpoints/sam_vit_b_01ec64.pth',
-                    sam_model_type='vit_b'
+                    sam_model_type=model_variant
                 )
                 
                 _, val_loader = get_dataloaders(
@@ -504,16 +538,16 @@ class ModelEvaluator:
                     normalize=False  # SAM handles normalization
                 )
                 
-                model_name = f"SAM-{config_name}"
+                model_name = f"SAM-{sam_type}-{model_variant}"
                 results = self._evaluate_single_model(model, val_loader, model_name)
-                results['architecture'] = 'SAM' if 'finetuned' in config_name else 'SAM Encoder + CNN'
+                results['architecture'] = 'SAM' if sam_type == 'finetuned' else 'SAM Encoder + CNN'
                 results['feature_config'] = 'rgb'
                 results['model_family'] = 'Foundation Model (Segmentation-specific)'
                 
                 all_results.append(results)
                 
             except Exception as e:
-                print(f"✗ Error evaluating SAM-{config_name}: {e}")
+                print(f"✗ Error evaluating SAM-{sam_type}-{model_variant}: {e}")
                 continue
         
         # ============================================================
