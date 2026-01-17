@@ -83,7 +83,7 @@ This is your **core contribution**. You need results before analyzing them.
 **Morning** - UNet baseline:✅
 ```bash
 # RGB baseline (2-3 hours)
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --data_dir dataset --model_type unet --feature_config rgb --batch_size 4 --epochs 100 --image_size 512 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --data_dir dataset_1024 --model_type unet --feature_config rgb --batch_size 4 --epochs 100 --image_size 1024 --use_wandb
 
 # All features (2-3 hours)
 $env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_dir dataset --model_type unet --feature_config all --batch_size 4 --epochs 100 --image_size 512 --use_wandb
@@ -92,10 +92,10 @@ $env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_d
 **Afternoon** - DeepLabv3+ baseline:
 ```bash
 # RGB (3-4 hours)
-$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --data_dir dataset --model_type deeplabv3plus --feature_config rgb --batch_size 4 --epochs 100 --image_size 512 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="0"; python -m src.experiments.train_baseline --data_dir dataset_resized --model_type deeplabv3plus --feature_config rgb --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 
 # All features (3-4 hours)
-$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_dir dataset --model_type deeplabv3plus --feature_config all --batch_size 4 --epochs 100 --image_size 512 --use_wandb
+$env:CUDA_VISIBLE_DEVICES="1"; python -m src.experiments.train_baseline --data_dir dataset_resized --model_type deeplabv3plus --feature_config all --batch_size 4 --epochs 100 --image_size 512 --use_wandb
 ```
 
 **End of Day 1**: Check W&B dashboard, verify IoU scores are reasonable (>0.70)

@@ -633,10 +633,10 @@ def main():
     RGB_MODEL_PATH = "./experiments/results/baseline/deeplabv3plus/rgb/checkpoints/best_model.pth"  
     ALL_CHANNELS_MODEL_PATH = "./experiments/results/baseline/deeplabv3plus/all/checkpoints/best_model.pth"  
     
-    IMAGE_DIR = "./dataset/test/images"  
-    MASK_DIR = "./dataset/test/masks"    
+    IMAGE_DIR = "./dataset_resized/test/images"  
+    MASK_DIR = "./dataset_resized/test/masks"    
     
-    OUTPUT_DIR = "./experiment/visualizations/deeplabv3plus"
+    OUTPUT_DIR = "./experiment/visualizations/deeplabv3plus_resized"
     
     # How many samples to visualize (set to None for all)
     NUM_SAMPLES = None
