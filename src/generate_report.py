@@ -40,7 +40,7 @@ class ReportGenerator:
         self.results_df = pd.read_csv(results_csv)
         
         if Path(stats_json).exists():
-            with open(stats_json, 'r') as f:
+            with open(stats_json, 'r', encoding='utf-8') as f:
                 self.stats = json.load(f)
         else:
             self.stats = {}
@@ -69,7 +69,7 @@ class ReportGenerator:
     def generate_report(self) -> None:
         """Generate complete research report"""
         
-        with open(self.output_file, 'w') as f:
+        with open(self.output_file, 'w', encoding='utf-8') as f:
             # Header
             f.write("=" * 80 + "\n")
             f.write("COMPREHENSIVE RESEARCH ANALYSIS REPORT\n")
