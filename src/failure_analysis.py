@@ -190,8 +190,51 @@ class FailureModeAnalyzer:
             raise ValueError(f"Unknown model type: {model_type}")
         
         # Load weights
-        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
-        model.load_state_dict(checkpoint)
+        # checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+        # model.load_state_dict(checkpoint)
+
+        # Load checkpoint
+        if model_path.exists():
+            checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+            
+            # Handle different checkpoint formats
+            state_dict_to_load = None
+            
+            if isinstance(checkpoint, dict):
+                if 'model_state_dict' in checkpoint:
+                    # Checkpoint saved with metadata (epoch, optimizer, etc.)
+                    state_dict_to_load = checkpoint['model_state_dict']
+                    print(f"✓ Loaded checkpoint (with metadata): {model_path.name}")
+                elif 'state_dict' in checkpoint:
+                    # Alternative format
+                    state_dict_to_load = checkpoint['state_dict']
+                    print(f"✓ Loaded checkpoint (with state_dict): {model_path.name}")
+                else:
+                    # Assume it's a raw state dict
+                    state_dict_to_load = checkpoint
+                    print(f"✓ Loaded checkpoint (raw): {model_path.name}")
+            else:
+                # Fallback - try loading directly
+                state_dict_to_load = checkpoint
+                print(f"✓ Loaded checkpoint: {model_path.name}")
+            
+            # Load with strict=False to handle architecture mismatches
+            # (e.g., aux_classifier present in trained model but not needed for inference)
+            try:
+                missing_keys, unexpected_keys = model.load_state_dict(state_dict_to_load, strict=False)
+                
+                if unexpected_keys:
+                    print(f"  ⚠ Ignoring unexpected keys: {len(unexpected_keys)} keys (e.g., aux_classifier)")
+                if missing_keys:
+                    print(f"  ⚠ Warning: Missing keys in checkpoint: {missing_keys[:5]}...")
+                    
+            except Exception as e:
+                print(f"  ✗ Error loading state dict: {e}")
+                raise
+        else:
+            raise FileNotFoundError(f"Checkpoint not found: {model_path}")
+
+
         model = model.to(self.device)
         model.eval()
         
