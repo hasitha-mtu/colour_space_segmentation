@@ -456,7 +456,7 @@ class StatisticalAnalyzer:
         }
         
         # Run analyses
-        rgb_comp = self.rgb_vs_engineered()
+        rgb_comp = self.rgb_vs_engineered_features()
         if not rgb_comp.empty:
             report['rgb_vs_engineered'] = {
                 'rgb_wins': int(sum((rgb_comp['winner'] == rgb_comp['model1']) & 
