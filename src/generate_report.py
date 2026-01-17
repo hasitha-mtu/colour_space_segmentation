@@ -143,6 +143,9 @@ for UAV-based water extraction in the Crookstown catchment, Ireland. The study c
 - **Baseline CNNs** ({n_baseline} models): UNet and DeepLabv3+ with different feature configurations
 - **Foundation Models** ({n_foundation} models): DINOv2 (self-supervised) and SAM (segmentation-specific)
 
+**Dataset:** {self.results_df['n_samples'].iloc[0]} annotated image-mask pairs derived from 415 original 
+UAV survey images through spatial tiling, with image-level train/test split.
+
 **Best Overall Model:** {best_model['model']}
 - IoU: {best_model['iou_mean']:.4f} ± {best_model['iou_std']:.4f}
 - Dice: {best_model['dice_mean']:.4f}
@@ -357,7 +360,7 @@ Chen & Tsviatkou (2025). Simply confirming this in another domain has limited no
 2. **Foundation Model Comparison** (If results show differences)
    - Comparing self-supervised (DINOv2) vs. segmentation-specific (SAM) pre-training paradigms
    - Evaluating color space dependency changes with foundation models
-   - Data efficiency analysis with limited annotated samples (415 images)
+   - Data efficiency analysis: 415 original UAV images, tiled to 9,456 annotated patches
 
 3. **Operational Deployment Framework**
    - Computational cost-benefit analysis for edge devices
@@ -374,8 +377,9 @@ rather than claiming algorithmic novelty.
         self._write_paragraph(f, """
 **Acknowledged Limitations:**
 
-1. **Limited Dataset Size:** 415 annotated images from 2 survey dates may not capture full 
-   seasonal/illumination variation
+1. **Dataset Scope:** 415 original UAV images (tiled to 9,456 annotated patches) from 2 survey 
+   dates may not capture full seasonal/illumination variation. Tiles from the same image are 
+   spatially correlated, requiring image-level train/test splitting.
 
 2. **Single Study Site:** Crookstown catchment results may not generalize to all Irish 
    catchments or other geographic regions
