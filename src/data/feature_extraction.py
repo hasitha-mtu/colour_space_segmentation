@@ -188,5 +188,5 @@ if __name__ == '__main__':
         ax.axis('off')
     
     plt.tight_layout()
-    plt.savefig('/home/claude/pytorch_river_seg/test_features.png', dpi=150)
+    plt.savefig('experiments/test_features.png', dpi=150)
     print("\nTest visualization saved to test_features.png")
