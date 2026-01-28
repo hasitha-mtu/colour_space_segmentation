@@ -273,7 +273,7 @@ def create_compact_visualization(image_path: str, output_path: str = 'feature_ch
 
 def create_paper_figure(image_path: str, mask_path: str = None, 
                         output_path: str = 'fig_feature_channels.pdf',
-                        figsize: Tuple[int, int] = (7.5, 6), dpi: int = 300):
+                        figsize: Tuple[int, int] = (12, 9), dpi: int = 600):
     """
     Create a publication-ready figure for IEEE conference paper.
     Single column width (~3.5in) or double column width (~7.5in).
@@ -283,6 +283,19 @@ def create_paper_figure(image_path: str, mask_path: str = None,
     Row 2: (e) H, (f) S, (g) a, (h) b                  [+ Chrominance label]
     Row 3: (i) Cb, (j) Cr, (k) Intensity, (l) Mask
     """
+    # Set high-quality rendering parameters
+    plt.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman', 'DejaVu Serif', 'Liberation Serif'],
+        'font.size': 14,
+        'axes.titlesize': 16,
+        'axes.titleweight': 'bold',
+        'figure.dpi': 150,
+        'savefig.dpi': dpi,
+        'image.interpolation': 'lanczos',
+        'image.resample': True,
+    })
+    
     # Load image
     image = cv2.imread(image_path)
     if image is None:
@@ -299,60 +312,66 @@ def create_paper_figure(image_path: str, mask_path: str = None,
     luminance = extractor.extract_luminance(image)
     chrominance = extractor.extract_chrominance(image)
     
-    # Create figure
+    # Create figure with larger size
     fig, axes = plt.subplots(3, 4, figsize=figsize)
-    plt.subplots_adjust(hspace=0.25, wspace=0.1)
+    plt.subplots_adjust(hspace=0.3, wspace=0.15)
     
-    # Titles with subfigure labels
-    titles_row1 = ['(a) RGB', '(b) L', '(c) L$_{range}$', '(d) L$_{texture}$']
+    # Titles with subfigure labels - larger font
+    titles_row1 = ['(a) RGB', '(b) L', r'(c) L$_{\mathrm{range}}$', r'(d) L$_{\mathrm{texture}}$']
     titles_row2 = ['(e) H', '(f) S', '(g) a', '(h) b']
     titles_row3 = ['(i) Cb', '(j) Cr', '(k) Intensity', '(l) Ground Truth']
     
+    title_fontsize = 14
+    
     # Row 1: RGB + Luminance
-    axes[0, 0].imshow(image)
-    axes[0, 0].set_title(titles_row1[0], fontsize=9)
+    axes[0, 0].imshow(image, interpolation='lanczos')
+    axes[0, 0].set_title(titles_row1[0], fontsize=title_fontsize, fontweight='bold', pad=8)
     axes[0, 0].axis('off')
     
     for i in range(3):
         normalized = extractor.normalize_channel(luminance[:, :, i])
-        axes[0, i+1].imshow(normalized, cmap='gray')
-        axes[0, i+1].set_title(titles_row1[i+1], fontsize=9)
+        axes[0, i+1].imshow(normalized, cmap='gray', interpolation='lanczos')
+        axes[0, i+1].set_title(titles_row1[i+1], fontsize=title_fontsize, fontweight='bold', pad=8)
         axes[0, i+1].axis('off')
     
     # Row 2: Chrominance (H, S, a, b)
     cmaps_row2 = ['hsv', 'gray', 'RdYlGn', 'RdYlGn']
     for i in range(4):
         normalized = extractor.normalize_channel(chrominance[:, :, i])
-        axes[1, i].imshow(normalized, cmap=cmaps_row2[i])
-        axes[1, i].set_title(titles_row2[i], fontsize=9)
+        axes[1, i].imshow(normalized, cmap=cmaps_row2[i], interpolation='lanczos')
+        axes[1, i].set_title(titles_row2[i], fontsize=title_fontsize, fontweight='bold', pad=8)
         axes[1, i].axis('off')
     
     # Row 3: Chrominance (Cb, Cr, Intensity) + Mask
     cmaps_row3 = ['RdYlBu', 'RdYlBu', 'gray']
     for i in range(3):
         normalized = extractor.normalize_channel(chrominance[:, :, i+4])
-        axes[2, i].imshow(normalized, cmap=cmaps_row3[i])
-        axes[2, i].set_title(titles_row3[i], fontsize=9)
+        axes[2, i].imshow(normalized, cmap=cmaps_row3[i], interpolation='lanczos')
+        axes[2, i].set_title(titles_row3[i], fontsize=title_fontsize, fontweight='bold', pad=8)
         axes[2, i].axis('off')
     
     # Mask or placeholder
     if mask is not None:
-        axes[2, 3].imshow(mask, cmap='gray')
+        axes[2, 3].imshow(mask, cmap='gray', interpolation='lanczos')
     else:
         # Create placeholder
         axes[2, 3].text(0.5, 0.5, 'Mask\nN/A', ha='center', va='center', 
-                        transform=axes[2, 3].transAxes, fontsize=10)
-    axes[2, 3].set_title(titles_row3[3], fontsize=9)
+                        transform=axes[2, 3].transAxes, fontsize=14, fontweight='bold')
+    axes[2, 3].set_title(titles_row3[3], fontsize=title_fontsize, fontweight='bold', pad=8)
     axes[2, 3].axis('off')
     
-    # Add category brackets/labels on the right side
-    fig.text(0.92, 0.78, 'Luminance\n(3 ch)', ha='left', va='center', 
-             fontsize=9, fontweight='bold', rotation=270)
-    fig.text(0.92, 0.35, 'Chrominance\n(7 ch)', ha='left', va='center', 
-             fontsize=9, fontweight='bold', rotation=270)
+    # Add category brackets/labels on the right side - larger font
+    fig.text(0.99, 0.78, 'Luminance\n(3 ch)', ha='left', va='center', 
+             fontsize=13, fontweight='bold', rotation=270)
+    fig.text(0.99, 0.35, 'Chrominance\n(7 ch)', ha='left', va='center', 
+             fontsize=13, fontweight='bold', rotation=270)
     
-    plt.savefig(output_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.savefig(output_path, dpi=dpi, bbox_inches='tight', facecolor='white', 
+                format=output_path.split('.')[-1], pad_inches=0.1)
     plt.close()
+    
+    # Reset rcParams to defaults
+    plt.rcParams.update(plt.rcParamsDefault)
     
     print(f"Paper figure saved to: {output_path}")
     return output_path
